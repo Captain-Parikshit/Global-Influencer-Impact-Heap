@@ -121,7 +121,7 @@ Provide accurate public information about "${name}" AND score their long-term gl
 Return ONLY a valid JSON object in this EXACT shape (no explanation, no markdown):
 {
   "instagram_followers_millions": <realistic number, e.g. 283.5>,
-  "x_followers_millions": <realistic number>,
+  "twitter_followers_millions": <realistic number (Twitter/X)>,
   "youtube_subscribers_millions": <realistic number>,
   "domain": "<one of: Technology | Science | Education | Healthcare | Arts | Business | Environment | Sports | Politics | Entertainment>",
   "sentiment": "<one of: Positive | Neutral | Negative>",
@@ -151,11 +151,14 @@ Rules:
     const raw = await callGroq(prompt, onCountdown);
     const data = parseJson(raw);
 
-    const clampMil   = (v) => Math.max(0, Math.round(Number(v) * 10) / 10);
+    const clampMil   = (v) => {
+      const num = Number(v);
+      return isNaN(num) ? 0 : Math.max(0, Math.round(num * 10) / 10);
+    };
     const clampScore = (v) => Math.max(0, Math.min(100, Math.round(Number(v) || 50)));
 
     const instagram = clampMil(data.instagram_followers_millions);
-    const x         = clampMil(data.x_followers_millions);
+    const x         = clampMil(data.twitter_followers_millions ?? data.x_followers_millions);
     const youtube   = clampMil(data.youtube_subscribers_millions);
     const total     = Math.round((instagram + x + youtube) * 10) / 10;
 

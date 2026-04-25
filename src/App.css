@@ -1,3 +1,42 @@
+/* ── Empty Rankings State ────────────────────────── */
+.empty-rankings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  gap: 0.6rem;
+  text-align: center;
+}
+
+.empty-rankings-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.empty-rankings-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.empty-rankings-sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.empty-rankings-sub strong {
+  color: var(--text-secondary);
+}
+
 /* ── Rank Medals ─────────────────────────────────── */
 .rank-cell { text-align: center; width: 60px; }
 

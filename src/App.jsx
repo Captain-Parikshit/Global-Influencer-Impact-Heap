@@ -229,7 +229,7 @@ function App() {
             <Crown size={24} className="text-accent" /> Impact Heap
           </h1>
           <p className="text-secondary" style={{ marginTop: '0.2rem', fontSize: '0.85rem' }}>
-            Rank influencers by long-term impact using Max-Heap ordering pro land
+            Rank influencers by long-term impact using Max-Heap ordering
           </p>
         </div>
         <button className="btn" id="add-influencer-btn" onClick={() => setShowForm(!showForm)}>
@@ -376,6 +376,32 @@ function App() {
         </div>
       )}
 
+      {/* ── Stat Cards ──────────────────────────── */}
+      <div className="stat-cards">
+        <div className="stat-card">
+          <div className="stat-icon stat-icon-purple">
+            <Users size={20} />
+          </div>
+          <div>
+            <div className="stat-label">Total Influencers</div>
+            <div className="stat-value">{rankings.length}</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon stat-icon-emerald">
+            <TrendingUp size={20} />
+          </div>
+          <div>
+            <div className="stat-label">Avg Impact Score</div>
+            <div className="stat-value">
+              {rankings.length > 0
+                ? Math.round(rankings.reduce((s, r) => s + r.score, 0) / rankings.length)
+                : '—'}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Main Content ────────────────────────── */}
       <div className="grid grid-cols-12">
         {/* Ranking Table */}
@@ -388,6 +414,14 @@ function App() {
             <div className="loading-state">
               <Loader2 size={28} className="spin text-accent" />
               <p className="text-secondary" style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>Scoring influencers…</p>
+            </div>
+          ) : rankings.length === 0 ? (
+            <div className="empty-rankings">
+              <div className="empty-rankings-icon">
+                <Crown size={32} />
+              </div>
+              <p className="empty-rankings-title">No influencers ranked yet</p>
+              <p className="empty-rankings-sub">Click <strong>Add Influencer</strong> above to get started</p>
             </div>
           ) : (
             <div className="table-wrapper">
