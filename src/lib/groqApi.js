@@ -115,6 +115,80 @@ Respond ONLY with a valid JSON object in this exact shape (no explanation, no ma
 };
 
 /* ────────────────────────────────────────────────────────────────
+   getPlatformAnalysis
+──────────────────────────────────────────────────────────────── */
+export const getPlatformAnalysis = async (name, domain, socials) => {
+  const igM = Number(socials.instagram).toFixed(1);
+  const xM  = Number(socials.x).toFixed(1);
+  const ytM = Number(socials.youtube).toFixed(1);
+
+  const prompt = `
+You are an expert social media impact analyst. Analyze "${name}", a public figure in the "${domain}" domain,
+who has approximately ${igM}M Instagram followers, ${xM}M X/Twitter followers, and ${ytM}M YouTube subscribers.
+
+Return ONLY a valid JSON object (no markdown, no explanation) in EXACTLY this shape:
+{
+  "platforms": [
+    {
+      "platform": "Instagram",
+      "followers_m": ${igM},
+      "engagement_rate": "<e.g. 5.2%>",
+      "sentiment_score": <number from -1.0 to +1.0>,
+      "impact_score": <number 0-100>,
+      "key_audience": "<short description>",
+      "llm_justification": "<1-2 sentence explanation>"
+    },
+    {
+      "platform": "X (Twitter)",
+      "followers_m": ${xM},
+      "engagement_rate": "<e.g. 4.5%>",
+      "sentiment_score": <number from -1.0 to +1.0>,
+      "impact_score": <number 0-100>,
+      "key_audience": "<short description>",
+      "llm_justification": "<1-2 sentence explanation>"
+    },
+    {
+      "platform": "YouTube",
+      "followers_m": ${ytM},
+      "engagement_rate": "<e.g. 3.8%>",
+      "sentiment_score": <number from -1.0 to +1.0>,
+      "impact_score": <number 0-100>,
+      "key_audience": "<short description>",
+      "llm_justification": "<1-2 sentence explanation>"
+    }
+  ],
+  "sentiment_drivers": {
+    "positive": "<comma-separated key positive drivers>",
+    "negative": "<comma-separated key negative drivers>",
+    "neutral": "<comma-separated neutral drivers>"
+  },
+  "narrative_dimensions": [
+    { "dimension": "Narrative Power",       "explanation": "<1 sentence>" },
+    { "dimension": "Emotional Resonance",   "explanation": "<1 sentence>" },
+    { "dimension": "Mass Trust Layer",      "explanation": "<1 sentence>" },
+    { "dimension": "Polarization Index",    "explanation": "<1 sentence>" },
+    { "dimension": "Conversion Potential",  "explanation": "<1 sentence>" }
+  ],
+  "prutl_mapping": [
+    { "dimension": "Positive Soul",        "observation": "<1 sentence>" },
+    { "dimension": "Negative Soul",        "observation": "<1 sentence>" },
+    { "dimension": "Positive Materialism", "observation": "<1 sentence>" },
+    { "dimension": "Negative Materialism", "observation": "<1 sentence>" }
+  ],
+  "final_insight": "<2-3 sentence overall conclusion covering platform-level strategic differences>"
+}
+`.trim();
+
+  try {
+    const raw = await callGroq(prompt);
+    return parseJson(raw);
+  } catch (err) {
+    console.error('[groqApi] getPlatformAnalysis failed:', err);
+    return null;
+  }
+};
+
+/* ────────────────────────────────────────────────────────────────
    getEthicalAnalysis
 ──────────────────────────────────────────────────────────────── */
 export const getEthicalAnalysis = async (name, domain) => {

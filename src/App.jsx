@@ -1,14 +1,20 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { MaxHeap } from './lib/MaxHeap';
-import { getLLMScore, getEthicalAnalysis } from './lib/groqApi';
+import { getLLMScore, getEthicalAnalysis, getPlatformAnalysis } from './lib/groqApi';
 import { calculateSystemScore, calculateFinalScore } from './lib/rankingLogic';
 import { fetchInfluencerProfile, formatFollowers, QuotaError } from './lib/socialApi';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './lib/firebase.js';
+import { loadHeap, saveHeap, clearHeap } from './lib/firestoreApi.js';
+import LoginPage from './components/LoginPage.jsx';
 import {
   Crown, TrendingUp, Users, Zap, Plus, Loader2,
   Sparkles, AlertTriangle, Star, BarChart3,
   Trophy, Eye, Brain, Shield, Flame, X,
-  Search, Trash2
+  Search, Trash2, Download, LogOut
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import './App.css';
 
 /* ── Platform SVG Icons ─────────────────────────────── */
@@ -76,24 +82,60 @@ const domainIcon = (domain) => {
 
 /* ── Main Component ──────────────────────────────────── */
 function App() {
-  const heapRef = useRef(new MaxHeap());
+  const heapRef    = useRef(new MaxHeap());
+  const [user, setUser]         = useState(undefined); // undefined = loading, null = logged out
 
   const [rankings, setRankings] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const seedingRef = useRef(false);
   const [selectedInfluencer, setSelectedInfluencer] = useState(null);
   const [ethicalData, setEthicalData] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [quotaError, setQuotaError] = useState(null);
-  const [retryCountdown, setRetryCountdown] = useState(0); // seconds left in auto-retry wait
+  const [retryCountdown, setRetryCountdown] = useState(0);
 
   // form state
   const [formName, setFormName] = useState('');
   const [profileData, setProfileData] = useState(null);
   const [fetchingProfile, setFetchingProfile] = useState(false);
 
-  const refreshRankings = useCallback(() => {
-    setRankings(heapRef.current.getAll());
+  /* ── Auth listener ───────────────────────────────── */
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser ?? null);
+      if (firebaseUser) {
+        // Load this user's heap from Firestore
+        if (!seedingRef.current) {
+          seedingRef.current = true;
+          const saved = await loadHeap(firebaseUser.uid);
+          heapRef.current = new MaxHeap();
+          saved.forEach(inf => heapRef.current.insert(inf));
+          setRankings(heapRef.current.getAll());
+        }
+      } else {
+        // Logged out — reset
+        heapRef.current = new MaxHeap();
+        setRankings([]);
+        seedingRef.current = false;
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    seedingRef.current = false;
+  };
+
+  const refreshRankings = useCallback(async () => {
+    const newRankings = heapRef.current.getAll();
+    setRankings(newRankings);
+    // Persist to Firestore if logged in
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      await saveHeap(currentUser.uid, newRankings);
+    }
   }, []);
 
   /* add a single influencer to the heap */
@@ -141,18 +183,18 @@ function App() {
     }
   }, [refreshRankings]);
 
-  /* seed initial data */
-  useEffect(() => {
-    if (seedingRef.current) return;
-    seedingRef.current = true;
-    (async () => {
-      setLoading(true);
-      // for (const s of SEED_INFLUENCERS) {
-      //   await addInfluencer(s);
-      // }
-      setLoading(false);
-    })();
-  }, [addInfluencer]);
+  /* ── OLD localStorage load removed — Firestore handles it in auth listener */
+
+  const clearAll = async () => {
+    if (window.confirm("Are you sure you want to remove all influencers? This cannot be undone.")) {
+      heapRef.current.clear();
+      setSelectedInfluencer(null);
+      setEthicalData(null);
+      setRankings([]);
+      const currentUser = auth.currentUser;
+      if (currentUser) await clearHeap(currentUser.uid);
+    }
+  };
 
   /* name input — just updates state, no auto-fetch */
   const handleNameChange = (newName) => {
@@ -212,13 +254,314 @@ function App() {
   };
 
   const removeInfluencer = (inf) => {
-    heapRef.current.remove(inf.id);
-    if (selectedInfluencer?.id === inf.id) {
-      setSelectedInfluencer(null);
-      setEthicalData(null);
+    if (window.confirm(`Are you sure you want to remove ${inf.name}?`)) {
+      heapRef.current.remove(inf.id);
+      if (selectedInfluencer?.id === inf.id) {
+        setSelectedInfluencer(null);
+        setEthicalData(null);
+      }
+      refreshRankings();
     }
-    refreshRankings();
   };
+
+  const downloadPDF = async () => {
+    setGeneratingPDF(true);
+    try {
+      const doc = new jsPDF('landscape');
+      const ACCENT = [99, 102, 241];      // indigo
+      const DARK   = [15, 23, 42];        // near-black
+      const MID    = [71, 85, 105];       // slate-600
+      const GREEN  = [34, 197, 94];
+      const RED    = [239, 68, 68];
+      const GOLD   = [234, 179, 8];
+
+      const section = (doc, label, y) => {
+        doc.setFontSize(13);
+        doc.setTextColor(...ACCENT);
+        doc.text(label, 14, y);
+        doc.setDrawColor(...ACCENT);
+        doc.line(14, y + 1.5, 283, y + 1.5);
+        return y + 8;
+      };
+
+      const wrappedText = (doc, text, x, y, maxW, fontSize = 9, color = MID) => {
+        doc.setFontSize(fontSize);
+        doc.setTextColor(...color);
+        const lines = doc.splitTextToSize(String(text || ''), maxW);
+        doc.text(lines, x, y);
+        return y + lines.length * (fontSize * 0.45);
+      };
+
+      // ── PAGE 1: Overview Table ─────────────────────────
+      doc.setFillColor(...DARK);
+      doc.rect(0, 0, 297, 28, 'F');
+      doc.setFontSize(20);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Global Influencer Impact Rankings', 14, 16);
+      doc.setFontSize(10);
+      doc.setTextColor(180, 180, 220);
+      doc.text(`Generated: ${new Date().toLocaleString()}  |  ${rankings.length} Influencer(s) Ranked`, 14, 24);
+
+      autoTable(doc, {
+        head: [["Rank", "Name", "Domain", "IG (M)", "X (M)", "YT (M)", "Total", "Sentiment", "Score", "Overall AI Justification"]],
+        body: rankings.map((inf, i) => [
+          i + 1, inf.name, inf.domain,
+          Number(inf.socials.instagram).toFixed(1),
+          Number(inf.socials.x).toFixed(1),
+          Number(inf.socials.youtube).toFixed(1),
+          formatFollowers(inf.socials.total),
+          inf.sentiment,
+          inf.score,
+          inf.justification?.overall || 'N/A'
+        ]),
+        startY: 33,
+        theme: 'grid',
+        headStyles: { fillColor: ACCENT, fontSize: 9, fontStyle: 'bold' },
+        styles: { cellPadding: 2.5, fontSize: 8.5, overflow: 'linebreak' },
+        columnStyles: { 9: { cellWidth: 100 } }
+      });
+
+      // ── PER-INFLUENCER PAGES ──────────────────────────
+      for (let idx = 0; idx < rankings.length; idx++) {
+        const inf = rankings[idx];
+
+        // Fetch enriched data
+        const [platData, ethData] = await Promise.all([
+          getPlatformAnalysis(inf.name, inf.domain, inf.socials),
+          getEthicalAnalysis(inf.name, inf.domain)
+        ]);
+
+        // ── Page: Cover / Score Breakdown ──────────────
+        doc.addPage();
+
+        // Header bar
+        doc.setFillColor(...DARK);
+        doc.rect(0, 0, 297, 32, 'F');
+        doc.setFontSize(20);
+        doc.setTextColor(255, 255, 255);
+        doc.text(inf.name, 14, 15);
+        doc.setFontSize(10);
+        doc.setTextColor(180, 180, 220);
+        doc.text(
+          `${inf.domain}  |  Total Followers: ${formatFollowers(inf.socials.total)}  |  Sentiment: ${inf.sentiment}  |  Impact Score: ${inf.score}`,
+          14, 24
+        );
+
+        let y = 40;
+
+        // Key Contribution
+        y = wrappedText(doc, `Key Contribution: ${inf.event}`, 14, y, 265, 9.5, MID);
+        y += 6;
+
+        // Score Breakdown table
+        // Each of the 4 AI dimensions contributes 25% to the Final AI Score.
+        // Normalized Score = raw AI score (0–100). Contribution = Score × 0.25
+        y = section(doc, 'Score Breakdown  (Final AI Score = avg of 4 dimensions, each worth 25%)', y);
+        const kScore  = inf.knowledge_score;
+        const siScore = inf.social_impact;
+        const eScore  = inf.ethical_score;
+        const lScore  = inf.longevity_score;
+        autoTable(doc, {
+          head: [["Metric", "Raw Score (0–100)", "Weight", "Contribution to Final Score"]],
+          body: [
+            ["Knowledge",     kScore,  "25%", `${kScore} × 0.25 = ${(kScore * 0.25).toFixed(2)} pts`],
+            ["Social Impact", siScore, "25%", `${siScore} × 0.25 = ${(siScore * 0.25).toFixed(2)} pts`],
+            ["Ethics",        eScore,  "25%", `${eScore} × 0.25 = ${(eScore * 0.25).toFixed(2)} pts`],
+            ["Longevity",     lScore,  "25%", `${lScore} × 0.25 = ${(lScore * 0.25).toFixed(2)} pts`],
+            ["Final AI Score", inf.score, "100%",
+              `(${kScore} + ${siScore} + ${eScore} + ${lScore}) ÷ 4 = ${inf.score}`]
+          ],
+          startY: y,
+          theme: 'striped',
+          headStyles: { fillColor: ACCENT, fontSize: 9 },
+          styles: { cellPadding: 2.5, fontSize: 9 },
+          columnStyles: {
+            1: { halign: 'center', fontStyle: 'bold' },
+            2: { halign: 'center', textColor: MID },
+            3: { textColor: [30, 41, 59] }
+          }
+        });
+        y = doc.lastAutoTable.finalY + 10;
+
+        // Groq Justification table
+        if (inf.justification) {
+          y = section(doc, 'Groq AI Justification (Score Dimensions)', y);
+          autoTable(doc, {
+            head: [["Dimension", "AI Reasoning"]],
+            body: [
+              ["Knowledge",     inf.justification.knowledge],
+              ["Social Impact", inf.justification.social_impact],
+              ["Ethics",        inf.justification.ethics],
+              ["Longevity",     inf.justification.longevity]
+            ],
+            startY: y,
+            theme: 'grid',
+            headStyles: { fillColor: ACCENT, fontSize: 9 },
+            styles: { cellPadding: 3, fontSize: 9, overflow: 'linebreak' },
+            columnStyles: { 0: { cellWidth: 35, fontStyle: 'bold' }, 1: { cellWidth: 'auto' } }
+          });
+          y = doc.lastAutoTable.finalY + 5;
+          y = wrappedText(doc, inf.justification.overall, 14, y, 265, 9, MID);
+          y += 10;
+        }
+
+        // Ethical Analysis
+        if (ethData) {
+          y = section(doc, 'Ethical Analysis', y);
+          y = wrappedText(doc, ethData.impact_summary, 14, y, 265, 9, MID);
+          y += 5;
+          doc.setFontSize(9);
+          doc.setTextColor(...GREEN);
+          doc.text(`✔ Positive Traits: ${ethData.positive_traits.join(' | ')}`, 14, y);
+          y += 6;
+          doc.setTextColor(...RED);
+          doc.text(`✘ Negative Traits: ${ethData.negative_traits.join(' | ')}`, 14, y);
+          y += 12;
+        }
+
+        // ── Page 2: Platform Analysis ──────────────────
+        doc.addPage();
+
+        doc.setFillColor(...DARK);
+        doc.rect(0, 0, 297, 28, 'F');
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.text(`${inf.name} — Platform Impact Analysis`, 14, 18);
+
+        y = 38;
+
+        if (platData) {
+          // Platform Impact table
+          y = section(doc, 'Social Media Influence Breakdown', y);
+          autoTable(doc, {
+            head: [["Platform", "Followers (M)", "Engagement Rate", "Sentiment (-1 to +1)", "Impact Score (0-100)", "Key Audience", "LLM Justification"]],
+            body: (platData.platforms || []).map(p => [
+              p.platform,
+              p.followers_m,
+              p.engagement_rate,
+              p.sentiment_score?.toFixed(2),
+              p.impact_score,
+              p.key_audience,
+              p.llm_justification
+            ]),
+            startY: y,
+            theme: 'grid',
+            headStyles: { fillColor: ACCENT, fontSize: 8.5, fontStyle: 'bold' },
+            styles: { cellPadding: 2.5, fontSize: 8.5, overflow: 'linebreak' },
+            columnStyles: {
+              0: { cellWidth: 28, fontStyle: 'bold' },
+              1: { cellWidth: 22, halign: 'center' },
+              2: { cellWidth: 25, halign: 'center' },
+              3: { cellWidth: 28, halign: 'center' },
+              4: { cellWidth: 25, halign: 'center' },
+              5: { cellWidth: 40 },
+              6: { cellWidth: 'auto' }
+            }
+          });
+          y = doc.lastAutoTable.finalY + 10;
+
+
+          // Sentiment Drivers
+          if (platData.sentiment_drivers) {
+            y = section(doc, 'Sentiment Insight Summary', y);
+            doc.setFontSize(9);
+            doc.setTextColor(...GREEN);
+            y = wrappedText(doc, `Positive Drivers: ${platData.sentiment_drivers.positive}`, 14, y, 265, 9, GREEN);
+            y += 2;
+            doc.setTextColor(...RED);
+            y = wrappedText(doc, `Negative Drivers: ${platData.sentiment_drivers.negative}`, 14, y, 265, 9, RED);
+            y += 2;
+            doc.setTextColor(...GOLD);
+            y = wrappedText(doc, `Neutral Drivers: ${platData.sentiment_drivers.neutral}`, 14, y, 265, 9, GOLD);
+            y += 10;
+          }
+
+          // Narrative Dimensions
+          if (platData.narrative_dimensions?.length) {
+            y = section(doc, 'LLM Justification Layer — Narrative Dimensions', y);
+            autoTable(doc, {
+              head: [["Dimension", "Explanation"]],
+              body: platData.narrative_dimensions.map(d => [d.dimension, d.explanation]),
+              startY: y,
+              theme: 'grid',
+              headStyles: { fillColor: ACCENT, fontSize: 9 },
+              styles: { cellPadding: 2.5, fontSize: 9, overflow: 'linebreak' },
+              columnStyles: { 0: { cellWidth: 45, fontStyle: 'bold' }, 1: { cellWidth: 'auto' } },
+              pageBreak: 'avoid'
+            });
+            y = doc.lastAutoTable.finalY + 10;
+          }
+
+          // PRUTL Mapping
+          if (platData.prutl_mapping?.length) {
+            // PRUTL = a soul-dimension framework mapping platform behavior to inner motivational forces:
+            //  Positive Soul     → Unity, trust, inspirational & community-driven messaging
+            //  Negative Soul     → Pride, control, polarization-driven perception
+            //  Positive Materialism → Tangible welfare, schemes, real-world benefit-driven content
+            //  Negative Materialism → Narrative battles, trade conflicts, power-play messaging
+            y = section(doc, 'PRUTL Soul Dimension Mapping', y);
+            doc.setFontSize(8);
+            doc.setTextColor(...MID);
+            doc.text(
+              'PRUTL maps platform behavior to 4 inner motivational forces: Positive/Negative Soul (values & identity) and Positive/Negative Materialism (action & power).',
+              14, y
+            );
+            y += 7;
+            autoTable(doc, {
+              head: [["Dimension", "What it means", "Observation for " + inf.name]],
+              body: [
+                ["Positive Soul",        "Unity, trust, inspiration & community",
+                  platData.prutl_mapping.find(d => d.dimension === 'Positive Soul')?.observation || ''],
+                ["Negative Soul",        "Pride, polarization & control",
+                  platData.prutl_mapping.find(d => d.dimension === 'Negative Soul')?.observation || ''],
+                ["Positive Materialism", "Welfare, tangible schemes & real-world benefit",
+                  platData.prutl_mapping.find(d => d.dimension === 'Positive Materialism')?.observation || ''],
+                ["Negative Materialism", "Narrative battles, power-play & conflict",
+                  platData.prutl_mapping.find(d => d.dimension === 'Negative Materialism')?.observation || '']
+              ],
+              startY: y,
+              theme: 'striped',
+              headStyles: { fillColor: [30, 41, 59], fontSize: 9 },
+              styles: { cellPadding: 2.5, fontSize: 9, overflow: 'linebreak' },
+              columnStyles: {
+                0: { cellWidth: 42, fontStyle: 'bold' },
+                1: { cellWidth: 68, textColor: MID },
+                2: { cellWidth: 'auto' }
+              },
+              pageBreak: 'avoid'
+            });
+            y = doc.lastAutoTable.finalY + 10;
+          }
+
+          // Final Insight
+          if (platData.final_insight) {
+            y = section(doc, 'Final Platform Insight', y);
+            wrappedText(doc, platData.final_insight, 14, y, 265, 9.5, DARK);
+          }
+        } else {
+          doc.setFontSize(10);
+          doc.setTextColor(...RED);
+          doc.text('Platform analysis could not be fetched from Groq for this influencer.', 14, y);
+        }
+      }
+
+      doc.save('influencer_impact_rankings.pdf');
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
+  // ── Auth gate ─────────────────────────────────────────────
+  if (user === undefined) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+        <Loader2 size={32} className="spin text-accent" />
+      </div>
+    );
+  }
+  if (!user) return <LoginPage />;
 
   return (
     <div className="container animate-fade-in">
@@ -232,10 +575,38 @@ function App() {
             Rank influencers by long-term impact using Max-Heap ordering
           </p>
         </div>
-        <button className="btn" id="add-influencer-btn" onClick={() => setShowForm(!showForm)}>
-          {showForm ? <X size={16} /> : <Plus size={16} />}
-          {showForm ? 'Close' : 'Add Influencer'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button className="btn btn-ghost flex items-center gap-2" onClick={downloadPDF} disabled={rankings.length === 0 || generatingPDF} style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--accent)' }}>
+            {generatingPDF ? <Loader2 size={16} className="spin" /> : <Download size={16} />} 
+            {generatingPDF ? 'Generating...' : 'Export PDF'}
+          </button>
+          <button className="btn btn-danger flex items-center gap-2" onClick={clearAll} disabled={rankings.length === 0}>
+            <Trash2 size={16} /> Clear All
+          </button>
+          <button className="btn" id="add-influencer-btn" onClick={() => setShowForm(!showForm)}>
+            {showForm ? <X size={16} /> : <Plus size={16} />}
+            {showForm ? 'Close' : 'Add Influencer'}
+          </button>
+          {/* User pill + logout */}
+          <div className="user-info">
+            <div className="user-avatar">
+              {user.photoURL
+                ? <img src={user.photoURL} alt={user.displayName} />
+                : (user.displayName || user.email || 'U')[0].toUpperCase()
+              }
+            </div>
+            <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user.displayName || user.email}
+            </span>
+            <button
+              onClick={handleLogout}
+              title="Sign out"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: '2px' }}
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
+        </div>
       </header>
 
       {/* ── Add Form ────────────────────────────── */}

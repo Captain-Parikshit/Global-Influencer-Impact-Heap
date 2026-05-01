@@ -117,4 +117,9 @@ export class MaxHeap {
   getAll() {
      return this.getTopN(this.heap.length);
   }
+
+  clear() {
+    this.heap = [];
+    this.idToIndex.clear();
+  }
 }
