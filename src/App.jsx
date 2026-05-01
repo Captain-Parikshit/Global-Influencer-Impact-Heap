@@ -776,7 +776,7 @@ function App() {
       {/* ── Main Content ────────────────────────── */}
       <div className="grid grid-cols-12">
         {/* Ranking Table */}
-        <div className="col-span-8 card" id="ranking-panel">
+        <div className="col-span-4 card" id="ranking-panel">
           <h2 className="flex items-center gap-2 mb-4" style={{ fontSize: '1rem' }}>
             <BarChart3 size={18} className="text-accent" /> Impact Rankings
           </h2>
@@ -849,7 +849,7 @@ function App() {
         </div>
 
         {/* ── Sidebar: Details Panel ──────────── */}
-        <div className="col-span-4">
+        <div className="col-span-8">
           {selectedInfluencer ? (
             <div className="card animate-slide-down" id="details-panel">
               <div className="flex items-center justify-between mb-3">
