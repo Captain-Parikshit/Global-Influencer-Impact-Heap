@@ -8,7 +8,7 @@ const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 const GROQ_URL     = `https://api.groq.com/openai/v1/chat/completions`;
 
 /** In-memory cache: name (lowercased) → profile result */
-const profileCache = new Map();
+export const profileCache = new Map();
 
 /** Custom error so callers can detect quota exhaustion specifically */
 export class QuotaError extends Error {
@@ -114,15 +114,24 @@ export const fetchInfluencerProfile = async (name, onCountdown) => {
   if (profileCache.has(cacheKey)) return profileCache.get(cacheKey);
 
   // ── Single combined prompt: profile + scores in one call ───────────
+  const currentYear = new Date().getFullYear();
   const prompt = `
-You are a real-world data analyst AND impact scoring expert.
-Provide accurate public information about "${name}" AND score their long-term global impact.
+You are a real-world data analyst AND impact scoring expert. Today's year is ${currentYear}.
+Provide CURRENT (${currentYear}) accurate public information about "${name}" AND score their long-term global impact.
+
+IMPORTANT — Follower count guidelines (use the MOST RECENT estimates you have, not old data):
+- Narendra Modi: ~100M+ Instagram, ~100M+ X/Twitter
+- Cristiano Ronaldo: ~640M+ Instagram, ~115M+ X/Twitter, ~60M+ YouTube
+- MrBeast: ~50M+ Instagram, ~35M+ X/Twitter, ~340M+ YouTube
+- Elon Musk: ~15M+ Instagram, ~210M+ X/Twitter, ~5M+ YouTube
+- Tukaram Mundhe: ~0.1M Instagram, ~0.05M X/Twitter, ~0M YouTube (Indian IAS officer, currently Commissioner of FDA Maharashtra — Food and Drug Administration; known for strict governance, anti-corruption drives, and bold administrative decisions; regional figure, not a global celebrity)
+- If you are unsure, lean toward HIGHER, more recent estimates — follower counts grow over time.
 
 Return ONLY a valid JSON object in this EXACT shape (no explanation, no markdown):
 {
-  "instagram_followers_millions": <realistic number, e.g. 283.5>,
-  "twitter_followers_millions": <realistic number (Twitter/X)>,
-  "youtube_subscribers_millions": <realistic number>,
+  "instagram_followers_millions": <realistic CURRENT number as of ${currentYear}, e.g. 283.5>,
+  "twitter_followers_millions": <realistic CURRENT number (Twitter/X) as of ${currentYear}>,
+  "youtube_subscribers_millions": <realistic CURRENT number as of ${currentYear}>,
   "domain": "<one of: Technology | Science | Education | Healthcare | Arts | Business | Environment | Sports | Politics | Entertainment>",
   "sentiment": "<one of: Positive | Neutral | Negative>",
   "key_contribution": "<one concise sentence, max 120 chars>",
@@ -140,9 +149,8 @@ Return ONLY a valid JSON object in this EXACT shape (no explanation, no markdown
 }
 
 Rules:
-- Use real-world knowledge only. Do NOT invent data.
+- Use your BEST and MOST RECENT knowledge. Do NOT use stale or outdated follower figures.
 - Scores must be realistic and differentiated (not all 50).
-- Follower counts must be realistic (e.g. Cristiano Ronaldo ~636M Instagram).
 - If person is unknown, use zeros for followers and 50 for scores.
 - Do NOT add anything outside the JSON object.
 `.trim();
