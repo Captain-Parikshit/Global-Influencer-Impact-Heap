@@ -1,0 +1,104 @@
+╔══════════════════════════════════════════════════════════════╗
+║          GLOBAL INFLUENCER IMPACT HEAP — UPGRADE IDEAS      ║
+╚══════════════════════════════════════════════════════════════╝
+
+These are potential upgrades and new features that could take this 
+project to the next level.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 📊 COMPARISON MODE
+   - Select 2-3 influencers and view a side-by-side comparison
+   - Radar chart showing all score dimensions overlaid
+   - Highlights which influencer is stronger in each dimension
+
+2. 📈 HISTORICAL TRACKING
+   - Store score snapshots over time (weekly/monthly)
+   - Line chart showing how an influencer's score evolves
+   - "Trending Up" / "Trending Down" indicators on the table
+
+3. 🔍 SEARCH & FILTER
+   - Search bar to filter influencers by name in the ranking table
+   - Filter by domain (Sports, Tech, etc.)
+   - Filter by sentiment (Positive/Negative/Mixed)
+   - Sort by any column (followers, score, domain)
+
+4. 🗂️ CATEGORY TABS / DOMAIN VIEWS
+   - Tabs at the top to filter by domain (All / Sports / Tech / etc.)
+   - Each domain gets its own leaderboard
+   - Domain-specific statistics and insights
+
+5. 🌍 GLOBAL MAP VISUALIZATION
+   - World map showing influencer origin countries
+   - Bubble size = follower count, color = impact score
+   - Click a country to see all influencers from that region
+
+6. 🏆 ACHIEVEMENT BADGES
+   - Auto-award badges like "100M+ Followers", "Ethics Champion",
+     "Rising Star" (fast score growth), "Consistent Leader"
+   - Display badges on influencer cards
+
+7. 📱 MOBILE RESPONSIVE LAYOUT
+   - The splitter should stack vertically on mobile
+   - Swipe gestures to switch between rankings and details
+   - Bottom navigation bar for mobile
+
+8. 🔔 REAL-TIME NOTIFICATIONS
+   - Alert when a new influencer overtakes the #1 spot
+   - Weekly email digest of ranking changes
+   - Push notifications for score threshold events
+
+9. 📋 CUSTOM SCORING WEIGHTS
+   - Let the user adjust weights (Knowledge, Ethics, etc.)
+   - Slider controls: 25% each → user can make Ethics 40%, etc.
+   - Rankings dynamically re-sort based on custom weights
+
+10. 🤖 AI CHAT ASSISTANT
+    - Chat with Groq about any influencer
+    - Ask "Why is X ranked higher than Y?"
+    - Ask "Who is the most ethical influencer in Tech?"
+    - Conversational interface embedded in the detail panel
+
+11. 📊 DASHBOARD ANALYTICS PAGE
+    - Dedicated analytics page with:
+      → Pie chart: domain distribution
+      → Bar chart: top 10 by score
+      → Scatter plot: followers vs. impact score
+      → Sentiment distribution across all influencers
+
+12. 🔄 IMPORT / EXPORT
+    - Export rankings as CSV, JSON (not just PDF)
+    - Import a list of influencer names to batch-score
+    - Share rankings via a public link
+
+13. 👥 TEAM COLLABORATION
+    - Invite other users to the same workspace
+    - Each team member can add/vote on influencers
+    - "Consensus Score" that averages team opinions
+
+14. 🎨 THEME CUSTOMIZATION
+    - Let users choose accent color
+    - Dark mode toggle
+    - Compact/Comfortable density toggle
+
+15. 🧮 DATA STRUCTURE VISUALIZATION
+    - Visual representation of the Max-Heap tree
+    - Animate insert/extract operations
+    - Educational mode: explain each heap operation step-by-step
+    - Great for the DS/CP project presentation
+
+16. ⚡ PERFORMANCE OPTIMIZATIONS
+    - Virtual scrolling for 100+ influencers
+    - Lazy-load the detail panel content
+    - Cache Groq API responses in localStorage
+    - Debounce profile fetch on typing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIORITY RECOMMENDATIONS (Quick Wins):
+  → #3  Search & Filter        (high impact, easy to build)
+  → #9  Custom Scoring Weights  (unique differentiator)
+  → #15 Heap Visualization      (perfect for DS/CP project)
+  → #1  Comparison Mode         (impressive for demo)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

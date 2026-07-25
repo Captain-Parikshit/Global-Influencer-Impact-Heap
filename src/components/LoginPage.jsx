@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   signInWithPopup,
   signInWithEmailAndPassword,
@@ -6,6 +6,8 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase.js';
 import { Crown, Mail, Lock, LogIn, UserPlus, AlertCircle, Loader2 } from 'lucide-react';
+import gsap from 'gsap';
+import * as THREE from 'three';
 
 /* ── Google "G" SVG ──────────────────────────────── */
 const GoogleIcon = () => (
@@ -17,12 +19,93 @@ const GoogleIcon = () => (
   </svg>
 );
 
+/* ── Mini Three.js particle scene for login ──────── */
+function LoginCanvas() {
+  const mountRef = useRef(null);
+
+  useEffect(() => {
+    const el = mountRef.current;
+    if (!el) return;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(el.clientWidth, el.clientHeight);
+    renderer.setClearColor(0x000000, 0);
+    el.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, el.clientWidth / el.clientHeight, 0.1, 500);
+    camera.position.z = 50;
+
+    // Soft lavender particle cloud
+    const count = 1200;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count * 3; i++) pos[i] = (Math.random() - 0.5) * 120;
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xc4b5fd, size: 0.22, transparent: true, opacity: 0.35,
+      depthWrite: false,
+    })));
+
+    let mouseX = 0, mouseY = 0;
+    const onMouseMove = (e) => {
+      mouseX = (e.clientX / window.innerWidth - 0.5);
+      mouseY = (e.clientY / window.innerHeight - 0.5);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+
+    const onResize = () => {
+      camera.aspect = el.clientWidth / el.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(el.clientWidth, el.clientHeight);
+    };
+    window.addEventListener('resize', onResize);
+
+    const clock = new THREE.Clock();
+    let frameId;
+    const animate = () => {
+      frameId = requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+      scene.rotation.y = t * 0.015 + mouseX * 0.06;
+      scene.rotation.x = Math.sin(t * 0.01) * 0.04 + mouseY * 0.03;
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('resize', onResize);
+      renderer.dispose();
+      if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={mountRef}
+      style={{ position: 'absolute', inset: 0, zIndex: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+    />
+  );
+}
+
 export default function LoginPage() {
-  const [mode, setMode]         = useState('login'); // 'login' | 'signup'
+  const [mode, setMode]         = useState('login');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const cardRef = useRef(null);
+
+  /* ── GSAP card entrance ──────────────────────────── */
+  useEffect(() => {
+    if (!cardRef.current) return;
+    gsap.fromTo(cardRef.current,
+      { y: 40, opacity: 0, scale: 0.96 },
+      { y: 0,  opacity: 1, scale: 1, duration: 0.75, ease: 'power3.out', delay: 0.15 }
+    );
+  }, []);
 
   const clearError = () => setError('');
 
@@ -67,32 +150,34 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-root">
-      {/* Animated background orbs */}
-      <div className="login-orb login-orb-1" />
-      <div className="login-orb login-orb-2" />
-      <div className="login-orb login-orb-3" />
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ background: '#fafafa' }}>
+      {/* Three.js particle background */}
+      <LoginCanvas />
 
-      <div className="login-card">
+      <div
+        className="relative z-10 w-full max-w-[430px] bg-white border border-[#e5e7eb] rounded-[18px] p-[2.5rem_2rem_2rem]"
+        ref={cardRef}
+        style={{ opacity: 0, boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
+      >
         {/* Logo */}
-        <div className="login-logo">
-          <Crown size={30} className="text-accent" />
+        <div className="w-[56px] h-[56px] bg-[rgba(124,58,237,0.08)] border border-[#e5e7eb] rounded-[16px] flex items-center justify-center mx-auto mb-[1.1rem]">
+          <Crown size={28} style={{ color: '#7c3aed' }} />
         </div>
-        <h1 className="login-title">Impact Heap</h1>
-        <p className="login-subtitle">
+        <h1 className="text-center text-[1.75rem] font-extrabold tracking-[-0.04em] mb-[0.3rem] text-[#111111]">Impact Heap</h1>
+        <p className="text-center text-[0.83rem] text-[#999999] mb-[1.6rem]">
           Rank global influencers by long-term impact
         </p>
 
         {/* Tab toggle */}
-        <div className="login-tabs">
+        <div className="flex bg-[#f3f4f6] border border-[#e5e7eb] rounded-[10px] p-1 mb-[1.3rem] gap-1">
           <button
-            className={`login-tab ${mode === 'login' ? 'active' : ''}`}
+            className={`flex-1 p-2 border-none rounded-[8px] text-[0.85rem] font-semibold cursor-pointer transition-all duration-200 ${mode === 'login' ? 'bg-[#7c3aed] text-white' : 'bg-transparent text-[#999999]'}`}
             onClick={() => { setMode('login'); clearError(); }}
           >
             Sign In
           </button>
           <button
-            className={`login-tab ${mode === 'signup' ? 'active' : ''}`}
+            className={`flex-1 p-2 border-none rounded-[8px] text-[0.85rem] font-semibold cursor-pointer transition-all duration-200 ${mode === 'signup' ? 'bg-[#7c3aed] text-white' : 'bg-transparent text-[#999999]'}`}
             onClick={() => { setMode('signup'); clearError(); }}
           >
             Create Account
@@ -101,40 +186,44 @@ export default function LoginPage() {
 
         {/* Error */}
         {error && (
-          <div className="login-error">
+          <div className="flex items-center gap-2 p-[0.65rem_0.9rem] bg-[rgba(220,38,38,0.06)] border border-[rgba(220,38,38,0.15)] rounded-[8px] text-[#dc2626] text-[0.83rem] mb-4">
             <AlertCircle size={14} />
             <span>{error}</span>
           </div>
         )}
 
         {/* Google button */}
-        <button className="login-google-btn" onClick={handleGoogle} disabled={loading}>
+        <button
+          className="w-full flex items-center justify-center gap-3 py-[0.78rem] px-4 bg-white border border-[#e5e7eb] rounded-[8px] text-[#111111] text-[0.9rem] font-medium cursor-pointer transition-all duration-200 mb-4 hover:bg-[#f3f4f6] hover:border-[#d1d5db] disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={handleGoogle}
+          disabled={loading}
+        >
           <GoogleIcon />
           Continue with Google
         </button>
 
-        <div className="login-divider"><span>or</span></div>
+        <div className="flex items-center gap-3 mb-4 text-[#999999] text-[0.78rem] before:content-[''] before:flex-1 before:h-px before:bg-[#e5e7eb] after:content-[''] after:flex-1 after:h-px after:bg-[#e5e7eb]"><span>or</span></div>
 
         {/* Email / Password form */}
-        <form onSubmit={handleEmail} className="login-form">
-          <div className="login-input-wrap">
-            <Mail size={15} className="login-input-icon" />
+        <form onSubmit={handleEmail} className="flex flex-col gap-[0.8rem]">
+          <div className="relative">
+            <Mail size={15} className="absolute left-[13px] top-1/2 -translate-y-1/2 text-[#999999] pointer-events-none" />
             <input
               type="email"
               placeholder="Email address"
-              className="login-input"
+              className="w-full bg-[#f3f4f6] border border-[#e5e7eb] rounded-[8px] py-[0.78rem] pr-[0.95rem] pl-[2.6rem] text-[#111111] text-[0.9rem] transition-all duration-200 focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[rgba(124,58,237,0.12)]"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
               autoComplete="email"
             />
           </div>
-          <div className="login-input-wrap">
-            <Lock size={15} className="login-input-icon" />
+          <div className="relative">
+            <Lock size={15} className="absolute left-[13px] top-1/2 -translate-y-1/2 text-[#999999] pointer-events-none" />
             <input
               type="password"
               placeholder="Password"
-              className="login-input"
+              className="w-full bg-[#f3f4f6] border border-[#e5e7eb] rounded-[8px] py-[0.78rem] pr-[0.95rem] pl-[2.6rem] text-[#111111] text-[0.9rem] transition-all duration-200 focus:outline-none focus:border-[#7c3aed] focus:ring-2 focus:ring-[rgba(124,58,237,0.12)]"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
@@ -142,7 +231,11 @@ export default function LoginPage() {
             />
           </div>
 
-          <button type="submit" className="login-submit-btn" disabled={loading}>
+          <button
+            type="submit"
+            className="w-full flex items-center justify-center gap-2 p-[0.82rem] bg-[#7c3aed] border-none rounded-[8px] text-white text-[0.95rem] font-bold cursor-pointer transition-all duration-200 mt-1 hover:bg-[#6d28d9] disabled:opacity-45 disabled:cursor-not-allowed"
+            disabled={loading}
+          >
             {loading
               ? <Loader2 size={16} className="spin" />
               : mode === 'login'
@@ -152,7 +245,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="login-footer">
+        <p className="text-center text-[0.72rem] text-[#999999] mt-[1.6rem]">
           DS/CP Project — Max-Heap × AI Impact Scoring
         </p>
       </div>
